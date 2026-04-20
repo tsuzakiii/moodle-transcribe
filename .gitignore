@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Config / secrets
+config.toml
+moodle_cookies.txt
+.env
+*.env
+
+# Output / cache
+moodle_out/
+output/
+.cache/
+*.mp4
+*.mp3
+*.m4a
+*.wav
+*.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Playwright
+ms-playwright/
