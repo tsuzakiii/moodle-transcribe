@@ -29,6 +29,8 @@ mkdir -p "$CFG_DIR"
     echo "Wrote default config to $CFG_DIR/config.toml"
 }
 
+chmod +x scripts/launcher_macos.command 2>/dev/null || true
+
 cat <<EOF
 
 Done. Next:

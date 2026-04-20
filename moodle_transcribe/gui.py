@@ -22,7 +22,7 @@ except Exception:
 
 from . import config as config_mod
 from . import moodle as moodle_mod
-from . import pipeline, platform_io
+from . import logging_setup, pipeline, platform_io, selfcheck
 
 
 class App:
@@ -79,12 +79,16 @@ class App:
         self.status = tk.StringVar(value=f"待機中 (transcribe={cfg.transcribe_provider}, llm={cfg.llm_provider})")
         ttk.Label(root, textvariable=self.status, anchor="w", relief="sunken").pack(fill="x", side="bottom")
 
-        threading.Thread(target=self._worker, daemon=True).start()
+        # Persistent file logger fed by GUI sink
+        self.log = logging_setup.make_logger(self._gui_log_sink)
 
-    def log(self, msg: str) -> None:
-        ts = datetime.now().strftime("%H:%M:%S")
+        threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(target=lambda: selfcheck.run(self.cfg, self.log), daemon=True).start()
+
+    def _gui_log_sink(self, line: str) -> None:
+        """Receives already-timestamped lines from logging_setup; forward to UI."""
         self.root.after(0, lambda: (
-            self.log_box.insert("end", f"{ts}  {msg}\n"),
+            self.log_box.insert("end", line + "\n"),
             self.log_box.see("end"),
         ))
 
