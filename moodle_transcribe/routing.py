@@ -72,26 +72,45 @@ def build_prompt(transcript_head: str, existing: dict[str, list[tuple[str, str]]
     )
 
 
+def _fallback(reason: str) -> dict:
+    return {"course": "_unsorted",
+            "path": [datetime.now().strftime("%Y%m%d_%H%M%S")],
+            "is_new_course": True, "is_duplicate": False, "reason": reason}
+
+
 def parse_response(text: str) -> dict:
-    """Extract first JSON object from `text`, falling back to a synthetic one."""
+    """Extract first JSON object from `text`, validate shape, fall back on errors."""
     m = re.search(r'\{.*"course".*\}', text, re.DOTALL)
     if not m:
-        return {"course": "_unsorted",
-                "path": [datetime.now().strftime("%Y%m%d_%H%M%S")],
-                "is_new_course": True, "is_duplicate": False,
-                "reason": "LLM response had no JSON"}
+        return _fallback("LLM response had no JSON")
     try:
         data = json.loads(m.group(0))
     except Exception as e:
-        return {"course": "_unsorted",
-                "path": [datetime.now().strftime("%Y%m%d_%H%M%S")],
-                "is_new_course": True, "is_duplicate": False,
-                "reason": f"JSON parse failed: {e}"}
-    if "path" not in data and "lecture" in data:
-        data["path"] = [data["lecture"]]
-    if not data.get("path"):
-        data["path"] = ["00_unknown"]
-    return data
+        return _fallback(f"JSON parse failed: {e}")
+    if not isinstance(data, dict):
+        return _fallback("LLM JSON is not an object")
+
+    course = data.get("course")
+    if not isinstance(course, str) or not course.strip():
+        return _fallback("LLM response missing 'course'")
+
+    # Accept legacy "lecture": "name" too. Normalize path → list[str].
+    path = data.get("path")
+    if path is None and "lecture" in data:
+        path = [data["lecture"]]
+    if isinstance(path, str):
+        # Single string: split on slashes so "第1回/01_xxx" becomes proper hierarchy.
+        path = [seg for seg in path.split("/") if seg]
+    if not isinstance(path, list) or not path or not all(isinstance(s, str) and s.strip() for s in path):
+        path = ["00_unknown"]
+
+    return {
+        "course": course.strip(),
+        "path": [s.strip() for s in path],
+        "is_new_course": bool(data.get("is_new_course", False)),
+        "is_duplicate": bool(data.get("is_duplicate", False)),
+        "reason": str(data.get("reason", "")),
+    }
 
 
 def route(transcript_path: Path, root: Path, llm_provider: str, llm_settings: dict,

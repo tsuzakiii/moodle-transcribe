@@ -14,6 +14,19 @@ from typing import Callable
 Logger = Callable[[str], None]
 
 
+def _load_cookiejar(cookies_file: Path) -> MozillaCookieJar:
+    """Wrap MozillaCookieJar.load with a clearer error for malformed files."""
+    cj = MozillaCookieJar()
+    try:
+        cj.load(str(cookies_file), ignore_discard=True, ignore_expires=True)
+    except Exception as e:
+        raise RuntimeError(
+            f"クッキーファイルの読み込みに失敗 ({cookies_file}): {e}\n"
+            "  → 'Get cookies.txt LOCALLY' で再エクスポートしてください"
+        ) from e
+    return cj
+
+
 def check_cookies_valid(cookies_file: Path, login_check_url: str, log: Logger) -> bool:
     """Hit the login-check URL with cookies; 200 = valid."""
     from curl_cffi import requests as cr
@@ -21,8 +34,11 @@ def check_cookies_valid(cookies_file: Path, login_check_url: str, log: Logger) -
     if not cookies_file.exists():
         log(f"  ❌ クッキーファイルなし: {cookies_file}")
         return False
-    cj = MozillaCookieJar()
-    cj.load(str(cookies_file), ignore_discard=True, ignore_expires=True)
+    try:
+        cj = _load_cookiejar(cookies_file)
+    except RuntimeError as e:
+        log(f"  ❌ {e}")
+        return False
     cookies = {c.name: c.value for c in cj}
     try:
         r = cr.get(login_check_url, cookies=cookies, impersonate="chrome",
@@ -50,8 +66,7 @@ def resolve_video(moodle_url: str, cookies_file: Path, log: Logger,
         )
 
     async def _run() -> tuple[str, list[str]]:
-        cj = MozillaCookieJar()
-        cj.load(str(cookies_file), ignore_discard=True, ignore_expires=True)
+        cj = _load_cookiejar(cookies_file)
         cookies = [{
             "name": c.name, "value": c.value, "domain": c.domain, "path": c.path,
             "secure": bool(c.secure), "httpOnly": False,

@@ -12,11 +12,16 @@ Logger = Callable[[str], None]
 
 
 def download_hls(url: str, dst_dir: Path, host: str, log: Logger) -> Path:
-    """Download an HLS playlist to dst_dir/video.mp4 with stream-copy."""
+    """Download an HLS playlist to dst_dir/video.mp4. Writes to .partial,
+    renames atomically on success — so a killed/crashed run does not leave
+    a truncated mp4 that later code mistakes for a complete download."""
     out = dst_dir / "video.mp4"
+    partial = dst_dir / "video.mp4.partial"
     if out.exists():
         log(f"  既存スキップ: {out.name}")
         return out
+    if partial.exists():
+        partial.unlink()
     headers = {
         "Origin": f"https://{host}",
         "Referer": f"https://{host}/",
@@ -33,10 +38,12 @@ def download_hls(url: str, dst_dir: Path, host: str, log: Logger) -> Path:
         "-i", url,
         "-c", "copy",
         "-bsf:a", "aac_adtstoasc",
-        str(out),
+        str(partial),
     ]
     log("  ffmpeg DL中…")
     p = platform_io.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
+        partial.unlink(missing_ok=True)
         raise RuntimeError(f"ffmpeg failed: {p.stderr[-500:]}")
+    partial.replace(out)
     return out

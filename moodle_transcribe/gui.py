@@ -86,11 +86,18 @@ class App:
         threading.Thread(target=lambda: selfcheck.run(self.cfg, self.log), daemon=True).start()
 
     def _gui_log_sink(self, line: str) -> None:
-        """Receives already-timestamped lines from logging_setup; forward to UI."""
-        self.root.after(0, lambda: (
-            self.log_box.insert("end", line + "\n"),
-            self.log_box.see("end"),
-        ))
+        """Receives already-timestamped lines from logging_setup; forward to UI.
+        After the Tk root is destroyed, .after() raises — silently swallow."""
+        def _append():
+            try:
+                self.log_box.insert("end", line + "\n")
+                self.log_box.see("end")
+            except tk.TclError:
+                pass
+        try:
+            self.root.after(0, _append)
+        except (RuntimeError, tk.TclError):
+            pass
 
     def refresh_courses(self) -> None:
         self.course_cb["values"] = pipeline.list_courses(self.cfg)

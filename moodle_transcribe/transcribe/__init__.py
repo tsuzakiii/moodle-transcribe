@@ -31,14 +31,25 @@ def get(provider: str, settings: dict) -> Transcriber:
 
 
 def write_outputs(segments: Iterable[Segment], dst_dir: Path) -> tuple[Path, Path]:
-    """Write transcript.txt + transcript.srt; return their paths."""
+    """Write transcript.txt + transcript.srt atomically (.tmp then rename),
+    so an interruption mid-write does not leave a half-finished file that
+    later runs would skip."""
     txt = dst_dir / "transcript.txt"
     srt = dst_dir / "transcript.srt"
-    with txt.open("w", encoding="utf-8") as ft, srt.open("w", encoding="utf-8") as fs:
-        for i, seg in enumerate(segments, 1):
-            line = seg.text.strip()
-            ft.write(line + "\n")
-            fs.write(f"{i}\n{_ts(seg.start)} --> {_ts(seg.end)}\n{line}\n\n")
+    txt_tmp = txt.with_suffix(".txt.tmp")
+    srt_tmp = srt.with_suffix(".srt.tmp")
+    try:
+        with txt_tmp.open("w", encoding="utf-8") as ft, srt_tmp.open("w", encoding="utf-8") as fs:
+            for i, seg in enumerate(segments, 1):
+                line = seg.text.strip()
+                ft.write(line + "\n")
+                fs.write(f"{i}\n{_ts(seg.start)} --> {_ts(seg.end)}\n{line}\n\n")
+        txt_tmp.replace(txt)
+        srt_tmp.replace(srt)
+    finally:
+        for p in (txt_tmp, srt_tmp):
+            if p.exists():
+                p.unlink(missing_ok=True)
     return txt, srt
 
 

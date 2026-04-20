@@ -88,12 +88,24 @@ def default_cookies_path() -> Path:
     return platform_io.user_config_dir("moodle-transcribe") / "moodle_cookies.txt"
 
 
+def _resolve_relative_to(base: Path, p: str | Path) -> Path:
+    """Expand ~ and env vars; if still relative, anchor to `base` (the config
+    file's directory) instead of the current working directory."""
+    expanded = Path(os.path.expandvars(os.path.expanduser(str(p))))
+    if not expanded.is_absolute():
+        expanded = base / expanded
+    return expanded.resolve()
+
+
 def load(path: Path | None = None) -> Config:
     """Load config from TOML, falling back to defaults. Env vars override paths."""
     cfg = dict(DEFAULT_CONFIG)
     cfg["cookies_file"] = str(default_cookies_path())
 
-    chosen = path or Path(os.environ.get("MOODLE_TRANSCRIBE_CONFIG", default_config_path()))
+    env_path = os.environ.get("MOODLE_TRANSCRIBE_CONFIG")
+    if env_path:
+        env_path = os.path.expandvars(os.path.expanduser(env_path))
+    chosen = path or Path(env_path) if env_path else (path or default_config_path())
     if chosen.exists():
         with chosen.open("rb") as f:
             user_cfg = tomllib.load(f)
@@ -105,9 +117,10 @@ def load(path: Path | None = None) -> Config:
     if env_cookies := os.environ.get("MOODLE_TRANSCRIBE_COOKIES"):
         cfg["cookies_file"] = env_cookies
 
+    base = chosen.parent if chosen.exists() else Path.cwd()
     return Config(
-        output_dir=_resolve_path(cfg["output_dir"]),
-        cookies_file=_resolve_path(cfg["cookies_file"]),
+        output_dir=_resolve_relative_to(base, cfg["output_dir"]),
+        cookies_file=_resolve_relative_to(base, cfg["cookies_file"]),
         transcribe=cfg["transcribe"],
         llm=cfg["llm"],
         moodle=cfg["moodle"],

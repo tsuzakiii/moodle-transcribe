@@ -1,6 +1,7 @@
 """Local faster-whisper transcription (GPU/CPU/MPS)."""
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -16,7 +17,10 @@ class _Seg:
 
 
 class LocalWhisper:
-    _model = None  # process-wide cache so re-runs reuse VRAM
+    # Process-wide cache keyed by (model, device, compute_type) so that
+    # changing config doesn't keep using the first-loaded combination.
+    _models: dict[tuple[str, str, str], object] = {}
+    _models_lock = threading.Lock()
 
     def __init__(self, model: str = "large-v3", device: str = "auto",
                  compute_type: str = "float16", language: str = "ja",
@@ -29,19 +33,23 @@ class LocalWhisper:
         self.vad_filter = vad_filter
 
     def _load(self, log):
-        if LocalWhisper._model is not None:
-            return LocalWhisper._model
-        platform_io.add_cuda_dll_dirs()
-        from faster_whisper import WhisperModel
-
         device, ctype = self._pick_device_and_ctype()
-        try:
-            log(f"  faster-whisper {self.model_name} on {device}/{ctype} を起動…")
-            LocalWhisper._model = WhisperModel(self.model_name, device=device, compute_type=ctype)
-        except Exception as e:
-            log(f"  起動失敗 ({e}) → CPU int8 にフォールバック")
-            LocalWhisper._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-        return LocalWhisper._model
+        key = (self.model_name, device, ctype)
+        with LocalWhisper._models_lock:
+            cached = LocalWhisper._models.get(key)
+            if cached is not None:
+                return cached
+            platform_io.add_cuda_dll_dirs()
+            from faster_whisper import WhisperModel
+            try:
+                log(f"  faster-whisper {self.model_name} on {device}/{ctype} を起動…")
+                model = WhisperModel(self.model_name, device=device, compute_type=ctype)
+            except Exception as e:
+                log(f"  起動失敗 ({e}) → CPU int8 にフォールバック")
+                key = (self.model_name, "cpu", "int8")
+                model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+            LocalWhisper._models[key] = model
+            return model
 
     def _pick_device_and_ctype(self) -> tuple[str, str]:
         if self.device != "auto":
