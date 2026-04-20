@@ -1,0 +1,61 @@
+# moodle-transcribe configuration
+# Copy to ~/.config/moodle-transcribe/config.toml (Linux/Mac) or
+# %APPDATA%\moodle-transcribe\config.toml (Windows), then edit.
+# Environment variables override these values; API keys should
+# preferably be set via env vars (OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY).
+
+# Where downloaded videos and transcripts go (default: ~/moodle_out)
+output_dir = "~/moodle_out"
+
+# Path to Netscape-format cookies.txt for Moodle authentication
+# (export from Chrome via "Get cookies.txt LOCALLY" extension)
+cookies_file = "~/.config/moodle-transcribe/moodle_cookies.txt"
+
+
+[transcribe]
+# provider: "local" (faster-whisper) | "openai" | "groq"
+provider = "local"
+
+[transcribe.local]
+model = "large-v3"           # tiny|base|small|medium|large-v3|distil-large-v3
+device = "auto"              # auto|cuda|cpu|mps
+compute_type = "float16"     # float16|int8|int8_float16|float32
+language = "ja"
+beam_size = 5
+vad_filter = true
+
+[transcribe.openai]
+model = "whisper-1"
+language = "ja"
+
+[transcribe.groq]
+model = "whisper-large-v3-turbo"
+language = "ja"
+
+
+[llm]
+# provider: "claude_cli" (uses Claude Code subscription) | "anthropic" | "openai"
+provider = "claude_cli"
+
+[llm.claude_cli]
+model = "haiku"              # haiku | sonnet | opus
+# Scratch directory to keep history out of main project transcripts
+scratch_dir = "~/.cache/moodle-transcribe/_routing_scratch"
+
+[llm.anthropic]
+model = "claude-haiku-4-5"
+
+[llm.openai]
+model = "gpt-5-mini"         # gpt-5-mini | gpt-4o-mini | etc.
+
+
+[moodle]
+# Hostname for HLS request headers (Origin/Referer)
+host = "wsdmoodle.waseda.jp"
+# Login-check URL used by `cookies` validator
+login_check_url = "https://wsdmoodle.waseda.jp/my/"
+
+
+[gui]
+# Launch headless browser visibly while debugging Moodle scraping
+playwright_headless = true
