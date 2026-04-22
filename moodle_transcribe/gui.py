@@ -20,6 +20,7 @@ except Exception:
     DND_FILES = None  # type: ignore
     _DND = False
 
+from . import auth
 from . import config as config_mod
 from . import moodle as moodle_mod
 from . import logging_setup, pipeline, platform_io, selfcheck
@@ -69,6 +70,10 @@ class App:
                    command=lambda: platform_io.open_folder(cfg.output_dir)).grid(row=1, column=2, padx=4)
         ttk.Button(ovf, text="クッキー有効性チェック",
                    command=self.check_cookies).grid(row=2, column=2, padx=4)
+        ttk.Button(ovf, text="Cookie自動更新",
+                   command=self.refresh_cookies).grid(row=3, column=2, padx=4)
+        ttk.Button(ovf, text="認証情報を登録…",
+                   command=self.set_credentials).grid(row=3, column=0, columnspan=2, sticky="w", padx=4)
         ovf.columnconfigure(1, weight=1)
 
         # Log + status
@@ -110,6 +115,25 @@ class App:
             if ok:
                 self.log("  ✓ 有効、ログイン状態維持")
         threading.Thread(target=_run, daemon=True).start()
+
+    def refresh_cookies(self) -> None:
+        def _run():
+            auth.refresh_cookies(self.cfg, self.log, headless=True)
+        threading.Thread(target=_run, daemon=True).start()
+
+    def set_credentials(self) -> None:
+        """Minimal inline dialog to stash username/password in the OS keyring."""
+        from tkinter import simpledialog, messagebox
+        username = simpledialog.askstring("認証情報", "ログインメール/ID:", parent=self.root)
+        if not username:
+            return
+        password = simpledialog.askstring("認証情報", "パスワード:", show="*", parent=self.root)
+        if not password:
+            return
+        auth.save_credentials(username, password)
+        messagebox.showinfo("認証情報", "OS キーリングに保存しました。\n以後はCookie切れ時に自動更新されます。",
+                            parent=self.root)
+        self.log(f"[認証情報] 登録: {username[:3]}***")
 
     def add_url(self) -> None:
         raw = self.url_entry.get().strip()

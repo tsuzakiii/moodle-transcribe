@@ -58,7 +58,19 @@ export GROQ_API_KEY=gsk_...
 $env:OPENAI_API_KEY = "sk-..."
 ```
 
-### 4. Moodleクッキー
+### 4-A. Moodleクッキー (推奨: 自動更新)
+
+ID/パスをOSキーリングに保存すれば、クッキー切れ時に自動ログイン+更新されます。
+
+```bash
+moodle-transcribe-cli set-credentials --username your-id@example.com
+# Password: ****
+moodle-transcribe-cli refresh-cookies --show-browser   # 初回は目視確認
+```
+
+2FAがある環境では失敗するので、そのときは 4-B の手動エクスポートで。
+
+### 4-B. Moodleクッキー (手動エクスポート)
 
 Chrome/Edgeに [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) を入れて、Moodle ログイン状態で `wsdmoodle.waseda.jp` (or your Moodle host) を Netscape format で書き出し → 設定ディレクトリの `moodle_cookies.txt` に保存。
 

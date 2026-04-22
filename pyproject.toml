@@ -18,6 +18,8 @@ dependencies = [
     "faster-whisper>=1.0",
     # GUI
     "tkinterdnd2>=0.4",
+    # Credential storage for auto cookie refresh
+    "keyring>=24",
 ]
 
 [project.optional-dependencies]

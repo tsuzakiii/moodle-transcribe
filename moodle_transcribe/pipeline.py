@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from . import download, moodle, routing, transcribe
+from . import auth, download, moodle, routing, transcribe
 from .config import Config
 
 Logger = Callable[[str], None]
@@ -112,7 +112,12 @@ def process_url(cfg: Config, url: str, log: Logger,
     if cfg.moodle["host"] in url:
         page_url = url
         if not moodle.check_cookies_valid(cfg.cookies_file, cfg.moodle["login_check_url"], log):
-            raise RuntimeError("Moodleクッキーが無効/期限切れ")
+            # Attempt automatic re-login if credentials are stored
+            log("  → 自動リフレッシュを試行…")
+            if not auth.refresh_cookies(cfg, log, headless=True):
+                raise RuntimeError("Moodleクッキーが無効/期限切れ (自動更新も失敗)")
+            if not moodle.check_cookies_valid(cfg.cookies_file, cfg.moodle["login_check_url"], log):
+                raise RuntimeError("自動更新後もクッキー無効")
         m3u8, title = moodle.resolve_video(url, cfg.cookies_file, log,
                                            headless=cfg.gui.get("playwright_headless", True))
         download_url = m3u8
