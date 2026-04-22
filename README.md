@@ -60,15 +60,42 @@ $env:OPENAI_API_KEY = "sk-..."
 
 ### 4-A. Moodleクッキー (推奨: 自動更新)
 
-ID/パスをOSキーリングに保存すれば、クッキー切れ時に自動ログイン+更新されます。
+ID/パスをOSキーリングに保存すれば、クッキー切れ時に自動ログインして cookies.txt を更新します。毎朝エクスポートし直さなくてOK。
 
+**認証情報登録** (どちらかでOK):
+
+*CLI*:
 ```bash
-moodle-transcribe-cli set-credentials --username your-id@example.com
-# Password: ****
-moodle-transcribe-cli refresh-cookies --show-browser   # 初回は目視確認
+moodle-transcribe-cli set-credentials --username your-id@akane.waseda.jp
+# Password: (入力、画面非表示)
 ```
 
-2FAがある環境では失敗するので、そのときは 4-B の手動エクスポートで。
+*GUI*: 「**認証情報を登録…**」ボタンをクリック → ID/パス入力
+
+**初回テスト** (ブラウザ可視でフロー確認):
+```bash
+moodle-transcribe-cli refresh-cookies --show-browser
+```
+SSOピッカー ("Waseda University Login" 等) → Microsoft ログイン → KMSI → Moodle、の流れが最後まで進めばOK。以降は透過的に走ります。
+
+**登録内容を消す / 入れ直す**:
+```bash
+moodle-transcribe-cli forget-credentials
+moodle-transcribe-cli set-credentials --username 正しいID
+```
+
+**保存先**: Windows Credential Manager / macOS Keychain / Linux SecretService (gnome-keyring/KWallet)。コード管理下のファイルには**書きません**。
+
+**制限**: 2FA要求される環境では自動ログイン失敗 → 4-B の手動エクスポートにフォールバック。
+
+**PATHに `moodle-transcribe-cli` が入らなかった場合** (pip install後に `command not found`):
+```bash
+# A. モジュール形式で直接叩く
+py -3.14 -m moodle_transcribe.cli set-credentials --username ...
+
+# B. PowerShell で一時的に PATH 追加
+$env:Path += ";$env:APPDATA\Python\Python314\Scripts"
+```
 
 ### 4-B. Moodleクッキー (手動エクスポート)
 
