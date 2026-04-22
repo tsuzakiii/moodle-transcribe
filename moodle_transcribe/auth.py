@@ -91,12 +91,22 @@ async def _login_flow(cfg: Config, username: str, password: str,
         log(f"  Moodle {host} に接続…")
         await page.goto(f"https://{host}/login/index.php", wait_until="domcontentloaded", timeout=30000)
 
-        # Microsoft Entra login page
-        # Email step
+        # Intermediate SSO picker: "早稲田学生はこちらからログイン" button.
+        # Try a few patterns; fall through silently if we're already past it.
+        for pattern in ("Waseda University Login", "早稲田", "Waseda", "学生"):
+            try:
+                loc = page.get_by_text(pattern).first
+                if await loc.is_visible(timeout=3000):
+                    log(f"  SSOピッカーで '{pattern}' をクリック…")
+                    await loc.click()
+                    break
+            except Exception:
+                continue
+
+        # Microsoft Entra login page (email step)
         try:
             await page.wait_for_selector('input[type="email"]', timeout=15000)
         except Exception as e:
-            # Might already be at an intermediate SSO picker — look for anchor text
             raise RuntimeError(f"Microsoftログインページに到達できませんでした: {e}")
         log("  メールアドレス入力…")
         await page.fill('input[type="email"]', username)
