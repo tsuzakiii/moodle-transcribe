@@ -38,6 +38,7 @@ def download_hls(url: str, dst_dir: Path, host: str, log: Logger) -> Path:
         "-i", url,
         "-c", "copy",
         "-bsf:a", "aac_adtstoasc",
+        "-f", "mp4",           # explicit: ".partial" extension hides the real format from ffmpeg
         str(partial),
     ]
     log("  ffmpeg DL中…")
