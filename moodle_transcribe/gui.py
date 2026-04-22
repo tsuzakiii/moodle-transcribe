@@ -151,6 +151,7 @@ class App:
             return
         self.url_entry.delete(0, "end")
         self._enqueue("url", url)
+        self.log(f"キュー追加: URL ({url[:60]}…)")
 
     def on_drop(self, event) -> None:
         files = self.root.tk.splitlist(event.data)

@@ -1,6 +1,7 @@
 """Local faster-whisper transcription (GPU/CPU/MPS)."""
 from __future__ import annotations
 
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,37 +34,40 @@ class LocalWhisper:
         self.vad_filter = vad_filter
 
     def _load(self, log):
-        device, ctype = self._pick_device_and_ctype()
-        key = (self.model_name, device, ctype)
         with LocalWhisper._models_lock:
-            cached = LocalWhisper._models.get(key)
-            if cached is not None:
-                return cached
             platform_io.add_cuda_dll_dirs()
             from faster_whisper import WhisperModel
-            try:
-                log(f"  faster-whisper {self.model_name} on {device}/{ctype} を起動…")
-                model = WhisperModel(self.model_name, device=device, compute_type=ctype)
-            except Exception as e:
-                log(f"  起動失敗 ({e}) → CPU int8 にフォールバック")
-                key = (self.model_name, "cpu", "int8")
-                model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-            LocalWhisper._models[key] = model
-            return model
 
-    def _pick_device_and_ctype(self) -> tuple[str, str]:
+            attempts = self._attempts()
+            first_err: Exception | None = None
+            for device, ctype in attempts:
+                key = (self.model_name, device, ctype)
+                cached = LocalWhisper._models.get(key)
+                if cached is not None:
+                    return cached
+                try:
+                    log(f"  faster-whisper {self.model_name} on {device}/{ctype} を起動…")
+                    model = WhisperModel(self.model_name, device=device, compute_type=ctype)
+                    LocalWhisper._models[key] = model
+                    return model
+                except Exception as e:
+                    first_err = e
+                    log(f"  {device}/{ctype} 起動失敗 ({type(e).__name__})")
+                    continue
+            raise RuntimeError(f"faster-whisper の起動に失敗: {first_err}")
+
+    def _attempts(self) -> list[tuple[str, str]]:
+        """Ordered (device, compute_type) attempts. For device='auto' we try
+        the best accelerator first, then fall back on failure.
+        faster-whisper uses ctranslate2, not torch, so we don't probe with
+        torch — we just let ct2 tell us what works."""
         if self.device != "auto":
-            return self.device, self.compute_type
-        # auto: try cuda, then mps (mac), else cpu
-        try:
-            import torch
-            if torch.cuda.is_available():
-                return "cuda", "float16"
-            if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-                return "cpu", "int8"  # ct2 lacks proper MPS; cpu int8 is the practical choice on Mac
-        except ImportError:
-            pass
-        return "cpu", "int8"
+            return [(self.device, self.compute_type)]
+        if sys.platform == "darwin":
+            # No CUDA on Mac; CT2 has no Metal backend → int8 on CPU is fastest.
+            return [("cpu", "int8")]
+        # Windows / Linux: try CUDA first, fall back to CPU int8.
+        return [("cuda", "float16"), ("cpu", "int8")]
 
     def transcribe(self, media: Path, log) -> Iterable[_Seg]:
         model = self._load(log)
